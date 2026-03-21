@@ -4,10 +4,14 @@ let
   cfg = config.services.configDriftManager;
   syncDir = "${config.xdg.configHome}/nix-drift-manager";
   
+  # Pre-escape the global directories for safe use in bash scripts
+  escSyncDir = lib.escapeShellArg syncDir;
+  escPatchDir = lib.escapeShellArg cfg.patchDir;
+  
   enabledFiles = lib.filterAttrs (n: v: v.enable) cfg.file;
 
   mkFileLogic = name: fileCfg: let
-    # FIX 2.1: Add a hash to prevent collisions between "a/b" and "a-b"
+    # Generate a hash to prevent collisions between files like "a/b" and "a-b"
     nameHash = builtins.substring 0 8 (builtins.hashString "sha256" name);
     safeName = "${lib.replaceStrings ["/"] ["-"] name}-${nameHash}";
     
@@ -23,11 +27,20 @@ let
     conflictFlag = "${syncDir}/${safeName}.conflict";
   in {
     inherit name safeName liveFile sourcePath nixGenFile appliedFile stashedFile conflictFlag;
+    
+    esc = {
+      name = lib.escapeShellArg name;
+      safeName = lib.escapeShellArg safeName;
+      liveFile = lib.escapeShellArg liveFile;
+      nixGenFile = lib.escapeShellArg nixGenFile;
+      appliedFile = lib.escapeShellArg appliedFile;
+      stashedFile = lib.escapeShellArg stashedFile;
+      conflictFlag = lib.escapeShellArg conflictFlag;
+    };
   };
 
   trackedFiles = lib.mapAttrs (name: fileCfg: mkFileLogic name fileCfg) enabledFiles;
 
-  # FIX 1.2: Removed bad escaping. Added proper variable names.
   patchHelperFunc = ''
     generate_patch_path() {
       local safe_name="$1"
@@ -49,7 +62,7 @@ let
     }
   '';
 
-  # FIX 3.2: Allow standardizing on kdialog or zenity
+  # GUI toolkit agnostic prompts
   guiPromptFunc = if cfg.dialogTool == "kdialog" then ''
     prompt_user() {
       ${pkgs.kdePackages.kdialog}/bin/kdialog --title "Configuration Drift Detected" \
@@ -101,7 +114,7 @@ in {
           };
           source = lib.mkOption {
             type = lib.types.path; # TODO: Ensure users only pass files, not directories!
-            description = "Path of the source file or directory.";
+            description = "Path of the source file.";
           };
         };
       }));
@@ -110,62 +123,65 @@ in {
 
   config = lib.mkIf cfg.enable {
 
+    # 1. THE ANCHOR
     home.file = lib.mapAttrs' (name: paths: 
       lib.nameValuePair "${syncDir}/${paths.safeName}.nix-gen" { source = paths.sourcePath; }
     ) trackedFiles;
 
+    # 2. ACTIVATION SCRIPT
     home.activation.driftManagerEnforcer = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-      verboseEcho "Ensuring Drift Manager base directory exists at ${syncDir}..."
-      run mkdir $VERBOSE_ARG -p ${lib.escapeShellArg syncDir}
+      verboseEcho "Ensuring Drift Manager base directory exists at "${escSyncDir}"..."
+      run mkdir $VERBOSE_ARG -p ${escSyncDir}
       
-      # FIX: Ensure we have access to coreutils and diffutils
       export PATH=${lib.makeBinPath [ pkgs.coreutils pkgs.diffutils ]}:$PATH
       
       ${lib.concatStringsSep "\n" (lib.mapAttrsToList (name: paths: ''
-        verboseEcho "--- Processing tracked file: ${name} ---"
+        verboseEcho "--- Processing tracked file: "${paths.esc.name}" ---"
         
-        verboseEcho "Checking if Nix generation changed or if this is the first run for ${name}..."
-        if [ ! -f ${lib.escapeShellArg paths.appliedFile} ] || ! cmp -s ${lib.escapeShellArg paths.nixGenFile} ${lib.escapeShellArg paths.appliedFile}; then
+        verboseEcho "Checking if Nix generation changed or if this is the first run for "${paths.esc.name}"..."
+        if [ ! -f ${paths.esc.appliedFile} ] || ! cmp -s ${paths.esc.nixGenFile} ${paths.esc.appliedFile}; then
           
           verboseEcho "Nix generation changed (or first run). Checking if a live configuration file already exists..."
-          if [ -f ${lib.escapeShellArg paths.liveFile} ]; then
+          if [ -f ${paths.esc.liveFile} ]; then
             
             verboseEcho "Live file exists. Checking if it contains configuration drift (manual edits)..."
-            if [ ! -f ${lib.escapeShellArg paths.appliedFile} ] || ! cmp -s ${lib.escapeShellArg paths.liveFile} ${lib.escapeShellArg paths.appliedFile}; then
-              verboseEcho "Drift detected. Stashing manual edits to ${paths.stashedFile}..."
-              run cp $VERBOSE_ARG ${lib.escapeShellArg paths.liveFile} ${lib.escapeShellArg paths.stashedFile}
+            if [ ! -f ${paths.esc.appliedFile} ] || ! cmp -s ${paths.esc.liveFile} ${paths.esc.appliedFile}; then
+              verboseEcho "Drift detected. Stashing manual edits to "${paths.esc.stashedFile}"..."
+              run cp $VERBOSE_ARG ${paths.esc.liveFile} ${paths.esc.stashedFile}
               
               verboseEcho "Flagging conflict to trigger GUI Negotiator..."
-              run touch ${lib.escapeShellArg paths.conflictFlag}
+              run touch ${paths.esc.conflictFlag}
             else
               verboseEcho "No drift detected. Live file matches previously applied Nix state."
             fi
           else
-            verboseEcho "No existing live file found at ${paths.liveFile}."
+            verboseEcho "No existing live file found at "${paths.esc.liveFile}"."
           fi
           
-          verboseEcho "Applying pure Nix state for ${name}..."
+          verboseEcho "Applying pure Nix state for "${paths.esc.name}"..."
           verboseEcho "Ensuring target directories exist..."
-          run mkdir $VERBOSE_ARG -p "$(dirname ${lib.escapeShellArg paths.liveFile})" "$(dirname ${lib.escapeShellArg paths.appliedFile})"
+          # dirname uses command substitution, so we wrap its result in double-quotes securely
+          run mkdir $VERBOSE_ARG -p "$(dirname ${paths.esc.liveFile})" "$(dirname ${paths.esc.appliedFile})"
           
           verboseEcho "Copying pure Nix state to live file location..."
-          run cp $VERBOSE_ARG ${lib.escapeShellArg paths.nixGenFile} ${lib.escapeShellArg paths.liveFile}
+          run cp $VERBOSE_ARG ${paths.esc.nixGenFile} ${paths.esc.liveFile}
           
           verboseEcho "Making the live file writable so manual edits are permitted..."
-          run chmod $VERBOSE_ARG u+w ${lib.escapeShellArg paths.liveFile}
+          run chmod $VERBOSE_ARG u+w ${paths.esc.liveFile}
           
           verboseEcho "Updating applied tracking file to reflect current Nix generation..."
-          run cp $VERBOSE_ARG ${lib.escapeShellArg paths.nixGenFile} ${lib.escapeShellArg paths.appliedFile}
+          run cp $VERBOSE_ARG ${paths.esc.nixGenFile} ${paths.esc.appliedFile}
         else
-          verboseEcho "Skipping ${name}: Nix generation unchanged and already applied."
+          verboseEcho "Skipping "${paths.esc.name}": Nix generation unchanged and already applied."
         fi
       '') trackedFiles)}
     '';
 
+    # 3. NEGOTIATOR DAEMON
     systemd.user.paths.nix-drift-negotiator = {
       Unit.Description = "Watch for NixOS Configuration Drift Conflicts";
       Path.PathExistsGlob = "${syncDir}/*.conflict";
-      Path.MakeDirectory = true; # FIX 2.3: Prevents service start failure if syncDir is missing
+      Path.MakeDirectory = true;
       Install.WantedBy = [ "default.target" ];
     };
 
@@ -173,7 +189,6 @@ in {
       Unit.Description = "NixOS Configuration Drift Negotiator";
       Service.Type = "oneshot";
       Service.ExecStart = pkgs.writeShellScript "nix-drift-negotiator" ''
-        # FIX 1.3: Inject dependencies securely
         export PATH=${lib.makeBinPath [ pkgs.coreutils pkgs.diffutils pkgs.kdePackages.kdialog pkgs.zenity pkgs.libnotify ]}:$PATH
         
         sleep 2 
@@ -181,34 +196,33 @@ in {
         ${guiPromptFunc}
         
         ${lib.concatStringsSep "\n" (lib.mapAttrsToList (name: paths: ''
-          # Only process if this specific conflict flag exists
-          if [ -f ${lib.escapeShellArg paths.conflictFlag} ] && [ -f ${lib.escapeShellArg paths.stashedFile} ]; then
+          if [ -f ${paths.esc.conflictFlag} ] && [ -f ${paths.esc.stashedFile} ]; then
             
-            CHOICE=$(prompt_user ${lib.escapeShellArg name})
+            CHOICE=$(prompt_user ${paths.esc.name})
 
             if [ "$CHOICE" = "Reinstate manual edits (Override Nix)" ]; then
-              cp ${lib.escapeShellArg paths.stashedFile} ${lib.escapeShellArg paths.liveFile}
-              notify_user "Reinstated manual edits for ${name}."
+              cp ${paths.esc.stashedFile} ${paths.esc.liveFile}
+              notify_user "Reinstated manual edits for "${paths.esc.name}"."
             
             elif [ "$CHOICE" = "Save edits as a Git Patch" ]; then
-              PATCH_FILE=$(generate_patch_path ${lib.escapeShellArg paths.safeName} ${lib.escapeShellArg cfg.patchDir})
-              diff -u --label "a/${name}" ${lib.escapeShellArg paths.appliedFile} --label "b/${name}" ${lib.escapeShellArg paths.stashedFile} > "$PATCH_FILE" || true
+              PATCH_FILE=$(generate_patch_path ${paths.esc.safeName} ${escPatchDir})
+              diff -u --label "a/"${paths.esc.name} ${paths.esc.appliedFile} --label "b/"${paths.esc.name} ${paths.esc.stashedFile} > "$PATCH_FILE" || true
               notify_user "Saved Git patch to $PATCH_FILE"
             
             elif [ "$CHOICE" = "Discard manual edits (Keep pure Nix)" ]; then
-              notify_user "Discarded manual edits for ${name}. System is pure."
+              notify_user "Discarded manual edits for "${paths.esc.name}". System is pure."
             fi
 
-            rm -f ${lib.escapeShellArg paths.conflictFlag} ${lib.escapeShellArg paths.stashedFile}
+            rm -f ${paths.esc.conflictFlag} ${paths.esc.stashedFile}
           fi
         '') trackedFiles)}
       '';
     };
 
+    # 4. THE CLI TOOL
     home.packages = [
       (pkgs.writeShellScriptBin "nix-drift" ''
         set -euo pipefail
-        # FIX 1.3: Inject coreutils/diffutils
         export PATH=${lib.makeBinPath [ pkgs.coreutils pkgs.diffutils ]}:$PATH
 
         ${patchHelperFunc}
@@ -218,31 +232,32 @@ in {
           status)
             echo "--- Nix Drift Status ---"
             ${lib.concatStringsSep "\n" (lib.mapAttrsToList (name: paths: ''
-              if [ -f ${lib.escapeShellArg paths.appliedFile} ] && ! cmp -s ${lib.escapeShellArg paths.liveFile} ${lib.escapeShellArg paths.appliedFile}; then
-                echo "DRIFT DETECTED: ${name}"
+              if [ -f ${paths.esc.appliedFile} ] && ! cmp -s ${paths.esc.liveFile} ${paths.esc.appliedFile}; then
+                echo "DRIFT DETECTED: "${paths.esc.name}
               fi
             '') trackedFiles)}
             ;;
             
           diff)
             ${lib.concatStringsSep "\n" (lib.mapAttrsToList (name: paths: ''
-              if [ -f ${lib.escapeShellArg paths.appliedFile} ] && ! cmp -s ${lib.escapeShellArg paths.liveFile} ${lib.escapeShellArg paths.appliedFile}; then
-                echo "--- Drift Diff for ${name} ---"
-                diff -u --color=always ${lib.escapeShellArg paths.appliedFile} ${lib.escapeShellArg paths.liveFile} || true
+              if [ -f ${paths.esc.appliedFile} ] && ! cmp -s ${paths.esc.liveFile} ${paths.esc.appliedFile}; then
+                echo "--- Drift Diff for "${paths.esc.name}" ---"
+                diff -u --color=always ${paths.esc.appliedFile} ${paths.esc.liveFile} || true
                 echo ""
               fi
             '') trackedFiles)}
             ;;
             
           patch)
+            # Standard bash variables inside double quotes are natively safe
             DEST_DIR="''${2:-${cfg.patchDir}}"
             COUNT=0
             
             ${lib.concatStringsSep "\n" (lib.mapAttrsToList (name: paths: ''
-              if [ -f ${lib.escapeShellArg paths.appliedFile} ] && ! cmp -s ${lib.escapeShellArg paths.liveFile} ${lib.escapeShellArg paths.appliedFile}; then
-                PATCH_FILE=$(generate_patch_path ${lib.escapeShellArg paths.safeName} "$DEST_DIR")
+              if [ -f ${paths.esc.appliedFile} ] && ! cmp -s ${paths.esc.liveFile} ${paths.esc.appliedFile}; then
+                PATCH_FILE=$(generate_patch_path ${paths.esc.safeName} "$DEST_DIR")
                 echo "Generating $PATCH_FILE..."
-                diff -u --label "a/${name}" ${lib.escapeShellArg paths.appliedFile} --label "b/${name}" ${lib.escapeShellArg paths.liveFile} > "$PATCH_FILE" || true
+                diff -u --label "a/"${paths.esc.name} ${paths.esc.appliedFile} --label "b/"${paths.esc.name} ${paths.esc.liveFile} > "$PATCH_FILE" || true
                 COUNT=$((COUNT + 1))
               fi
             '') trackedFiles)}
