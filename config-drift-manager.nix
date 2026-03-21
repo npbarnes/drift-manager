@@ -4,11 +4,41 @@ let
   cfg = config.services.configDriftManager;
   syncDir = "${config.xdg.configHome}/nix-drift-manager";
   
-  # Pre-escape the global directories for safe use in bash scripts
   escSyncDir = lib.escapeShellArg syncDir;
   escPatchDir = lib.escapeShellArg cfg.patchDir;
   
   enabledFiles = lib.filterAttrs (n: v: v.enable) cfg.file;
+
+  # --- recursive directory flattening logic ---
+  expandFileCfg = name: fileCfg:
+    let
+      # Check if the source is an actual directory that exists at evaluation time
+      isDir = builtins.pathExists fileCfg.source && builtins.readFileType fileCfg.source == "directory";
+    in
+      if isDir then
+        let
+          # Get all files inside the directory recursively
+          allFiles = lib.filesystem.listFilesRecursive fileCfg.source;
+          sourceStr = toString fileCfg.source;
+        in
+          # Convert the list of files into a flattened attribute set
+          builtins.listToAttrs (map (filePath:
+            let
+              # Extract the relative path (e.g., "init.lua" or "lua/plugins.lua")
+              relPath = lib.removePrefix "${sourceStr}/" (toString filePath);
+            in lib.nameValuePair "${name}/${relPath}" {
+              enable = fileCfg.enable;
+              target = "${fileCfg.target}/${relPath}";
+              source = filePath;
+            }
+          ) allFiles)
+      else
+        # If it's just a file, return it exactly as-is
+        { "${name}" = fileCfg; };
+
+  # Merge all the expanded sets together
+  flattenedFiles = lib.foldl' lib.mergeAttrs {} (lib.mapAttrsToList expandFileCfg enabledFiles);
+  # ---------------------------------------------------
 
   mkFileLogic = name: fileCfg: let
     # Generate a hash to prevent collisions between files like "a/b" and "a-b"
@@ -39,7 +69,7 @@ let
     };
   };
 
-  trackedFiles = lib.mapAttrs (name: fileCfg: mkFileLogic name fileCfg) enabledFiles;
+  trackedFiles = lib.mapAttrs (name: fileCfg: mkFileLogic name fileCfg) flattenedFiles;
 
   patchHelperFunc = ''
     generate_patch_path() {
@@ -113,8 +143,8 @@ in {
             description = "Path to target file relative to HOME.";
           };
           source = lib.mkOption {
-            type = lib.types.path; # TODO: Ensure users only pass files, not directories!
-            description = "Path of the source file.";
+            type = lib.types.path;
+            description = "Path of the source file or directory.";
           };
         };
       }));
