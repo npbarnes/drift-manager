@@ -9,7 +9,13 @@
     };
   };
 
-  outputs = { self, nixpkgs, home-manager }: {
-    homeManagerModules.default = import ./module.nix;
-  };
+  outputs =
+    {
+      self,
+      nixpkgs,
+      home-manager,
+    }:
+    {
+      homeManagerModules.default = import ./module.nix;
+    };
 }
