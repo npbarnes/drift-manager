@@ -1,6 +1,6 @@
-# Configuration Drift Manager
+# Drift Manager
 
-This Home Manager module aims to be a convenient (and somewhat opinionated), way to handle dotfiles in nix that:
+Drift Manager is a Home Manager module that aims to be a convenient (and somewhat opinionated), way to handle dotfiles in nix that:
   1. Ensures reproducibility by guaranteeing that the tracked files are restored every time a Home Manager generation is activated.
   2. Keeps tracked files as ordinary, mutable files that can be modified 'on the fly' either by hand or by the software that uses them.
   3. Provides convenient mechanisms for managing configuration drift. Specifically:
