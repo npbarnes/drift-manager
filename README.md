@@ -4,5 +4,5 @@ Drift Manager is a Home Manager module that aims to be a convenient (and somewha
   1. Ensures reproducibility by guaranteeing that the tracked files are restored every time a Home Manager generation is activated.
   2. Keeps tracked files as ordinary, mutable files that can be modified 'on the fly' either by hand or by the software that uses them.
   3. Provides convenient mechanisms for managing configuration drift. Specifically:
-     - a command line tool, `nix-drift` to query changes, revert them, or generate a patch that can be applied to your dotfiles repo, and
+     - a command line tool, `nix-drift`, to query changes, revert them, or generate a patch that can be applied to your dotfiles repo, and
      - notifications when manual changes have been overwritten that presents options to revert back to the modified configuration, discard manual configuration, or generate a patch for the changes.
