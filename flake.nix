@@ -1,5 +1,5 @@
 {
-  description = "Config Drift Manager - Safe, mutable dotfiles for Nix";
+  description = "Configuration Drift Manager - Safe, mutable dotfiles for Nix";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";

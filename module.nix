@@ -6,7 +6,7 @@
 }:
 
 let
-  cfg = config.services.configDriftManager;
+  cfg = config.services.drift-manager;
   syncDir = "${config.xdg.configHome}/nix-drift-manager";
 
   escSyncDir = lib.escapeShellArg syncDir;
@@ -141,7 +141,7 @@ let
 
 in
 {
-  options.services.configDriftManager = {
+  options.services.drift-manager = {
     enable = lib.mkEnableOption "Configuration Drift Manager & Patch Generator";
 
     patchDir = lib.mkOption {
