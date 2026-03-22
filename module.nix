@@ -100,7 +100,7 @@ let
       local safe_name="$1"
       local patch_dir="$2"
       local timestamp=$(date +%Y-%m-%dT%H:%M)
-      
+
       mkdir -p "$patch_dir"
 
       local base_name="$patch_dir/nix-drift-''${safe_name}-''${timestamp}"
@@ -213,15 +213,15 @@ in
 
           verboseEcho "Checking if Nix generation changed or if this is the first run for "${paths.esc.name}"..."
           if [ ! -f ${paths.esc.appliedFile} ] || ! cmp -s ${paths.esc.nixGenFile} ${paths.esc.appliedFile}; then
-            
+
             verboseEcho "Nix generation changed (or first run). Checking if a live configuration file already exists..."
             if [ -f ${paths.esc.liveFile} ]; then
-              
+
               verboseEcho "Live file exists. Checking if it contains configuration drift (manual edits)..."
               if [ ! -f ${paths.esc.appliedFile} ] || ! cmp -s ${paths.esc.liveFile} ${paths.esc.appliedFile}; then
                 verboseEcho "Drift detected. Stashing manual edits to "${paths.esc.stashedFile}"..."
                 run cp $VERBOSE_ARG ${paths.esc.liveFile} ${paths.esc.stashedFile}
-                
+
                 verboseEcho "Flagging conflict to trigger GUI Negotiator..."
                 run touch ${paths.esc.conflictFlag}
               else
@@ -230,18 +230,18 @@ in
             else
               verboseEcho "No existing live file found at "${paths.esc.liveFile}"."
             fi
-            
+
             verboseEcho "Applying pure Nix state for "${paths.esc.name}"..."
             verboseEcho "Ensuring target directories exist..."
             # dirname uses command substitution, so we wrap its result in double-quotes securely
             run mkdir $VERBOSE_ARG -p "$(dirname ${paths.esc.liveFile})" "$(dirname ${paths.esc.appliedFile})"
-            
+
             verboseEcho "Copying pure Nix state to live file location..."
             run cp $VERBOSE_ARG ${paths.esc.nixGenFile} ${paths.esc.liveFile}
-            
+
             verboseEcho "Making the live file writable so manual edits are permitted..."
             run chmod $VERBOSE_ARG u+w ${paths.esc.liveFile}
-            
+
             verboseEcho "Updating applied tracking file to reflect current Nix generation..."
             run cp $VERBOSE_ARG ${paths.esc.nixGenFile} ${paths.esc.appliedFile}
           else
@@ -273,25 +273,25 @@ in
           ]
         }:$PATH
 
-        sleep 2 
+        sleep 2
         ${patchHelperFunc}
         ${guiPromptFunc}
 
         ${lib.concatStringsSep "\n" (
           lib.mapAttrsToList (name: paths: ''
             if [ -f ${paths.esc.conflictFlag} ] && [ -f ${paths.esc.stashedFile} ]; then
-              
+
               CHOICE=$(prompt_user ${paths.esc.name})
 
               if [ "$CHOICE" = "Reinstate manual edits (Override Nix)" ]; then
                 cp ${paths.esc.stashedFile} ${paths.esc.liveFile}
                 notify_user "Reinstated manual edits for "${paths.esc.name}"."
-              
+
               elif [ "$CHOICE" = "Save edits as a Git Patch" ]; then
                 PATCH_FILE=$(generate_patch_path ${paths.esc.safeName} ${escPatchDir})
                 diff -u --label "a/"${paths.esc.name} ${paths.esc.appliedFile} --label "b/"${paths.esc.name} ${paths.esc.stashedFile} > "$PATCH_FILE" || true
                 notify_user "Saved Git patch to $PATCH_FILE"
-              
+
               elif [ "$CHOICE" = "Discard manual edits (Keep pure Nix)" ]; then
                 notify_user "Discarded manual edits for "${paths.esc.name}". System is pure."
               fi
@@ -328,7 +328,7 @@ in
               '') trackedFiles
             )}
             ;;
-            
+
           diff)
             ${lib.concatStringsSep "\n" (
               lib.mapAttrsToList (name: paths: ''
@@ -340,12 +340,12 @@ in
               '') trackedFiles
             )}
             ;;
-            
+
           patch)
             # Standard bash variables inside double quotes are natively safe
             DEST_DIR="''${2:-${cfg.patchDir}}"
             COUNT=0
-            
+
             ${lib.concatStringsSep "\n" (
               lib.mapAttrsToList (name: paths: ''
                 if [ -f ${paths.esc.appliedFile} ] && ! cmp -s ${paths.esc.liveFile} ${paths.esc.appliedFile}; then
@@ -356,7 +356,7 @@ in
                 fi
               '') trackedFiles
             )}
-            
+
             if [ "$COUNT" -gt 0 ]; then
               echo -e "\nDone. Patches saved to $DEST_DIR/"
               echo "Use 'git apply' or your preferred patch tool to merge these into your config."
@@ -364,7 +364,7 @@ in
               echo "No configuration drift found."
             fi
             ;;
-            
+
           *)
             echo "Usage: nix-drift [status|diff|patch [output-dir]]"
             exit 1
