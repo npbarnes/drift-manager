@@ -6,3 +6,5 @@ Drift Manager is a Home Manager module that aims to be a convenient (and somewha
   3. Provides convenient mechanisms for managing configuration drift. Specifically:
      - a command line tool, `nix-drift`, to query changes, revert them, or generate a patch that can be applied to your dotfiles repo, and
      - notifications when manual changes have been overwritten that presents options to revert back to the modified configuration, discard manual configuration, or generate a patch for the changes.
+
+The initial version was vibe-coded by Gemini 3.1 Pro, so don't expect it to be perfect yet. Actually, it doesn't work at all right now 😂. I'm going to fix it up the old fashioned way.
