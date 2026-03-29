@@ -15,7 +15,15 @@
       nixpkgs,
       home-manager,
     }:
+    let
+      system = "x86_64-linux";
+      pkgs = nixpkgs.legacyPackages.${system};
+    in
     {
       homeModules.default = import ./module.nix;
+
+      devShells.${system}.default = pkgs.mkShell {
+        packages = [ pkgs.shellcheck ];
+      };
     };
 }
