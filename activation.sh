@@ -23,8 +23,6 @@ stash() {
 
     # Check that the args are absolute paths
     if [[ "$abspath" != /* ]] || [[ "$stashdir" != /* ]]; then
-        echo "$abspath"
-        echo "$stashdir"
         echo "Error ($LINENO): argument not an absolute path, stash() only operates on absolute paths." >&2
         exit 1
     fi
