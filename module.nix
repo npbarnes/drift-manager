@@ -126,7 +126,7 @@ in
 
     appliedDir = lib.mkOption {
       type = lib.types.str;
-      default = "${cfg.workspace}/activated";
+      default = "${cfg.workspace}/applied";
       description = "Directory where files applied this generation are kept.";
     };
 
