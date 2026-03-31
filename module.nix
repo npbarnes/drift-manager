@@ -77,40 +77,19 @@ let
 
   trackedFiles = lib.mapAttrs (name: fileCfg: mkFileLogic name fileCfg) flattenedFiles;
 
-  patchHelperFunc = ''
-    generate_patch_path() {
-      local safe_name="$1"
-      local patch_dir="$2"
-      local timestamp=$(date +%Y-%m-%dT%H:%M)
-
-      mkdir -p "$patch_dir"
-
-      local base_name="$patch_dir/nix-drift-"${safe_name}"-"${timestamp}
-      local final_name=${base_name}".patch"
-      local counter=1
-
-      while [ -e "$final_name" ]; do
-        final_name=${base_name}"-"${counter}".patch"
-        counter=$((counter + 1))
-      done
-
-      echo "$final_name"
-    }
-  '';
-
   # GUI toolkit agnostic prompts
   prompt-title = "Configuration Drift Detected";
   prompt = "Activation applied a pure Nix generation to $1.\nHow would you handle manual endits?";
   reinstate-opt = "Reinstate manual edits (Override Nix)";
-  patch-opt = "Save edits as a Git patch";
   discard-opt = "Discard manual edits (Keep pure Nix)";
+  archive-opt = "Archive manual edits";
   guiPromptFunc =
     if cfg.dialogTool == "kdialog" then
       ''
         prompt_user() {
           ${pkgs.kdePackages.kdialog}/bin/kdialog --title "${prompt-title}" \
             --combobox "${prompt}" \
-            "${reinstate-opt}" "${patch-opt}" "${discard-opt}" \
+            "${reinstate-opt}" "${discard-opt}" "${archive-opt} \
             --default "${reinstate-opt}"
         }
         notify_user() { ${pkgs.kdePackages.kdialog}/bin/kdialog --passivepopup "$1" 4; }
@@ -121,7 +100,7 @@ let
           ${pkgs.zenity}/bin/zenity --list --title="${prompt-title}" \
             --text="${prompt}" \
             --radiolist --column="Select" --column="Action" \
-            TRUE "${reinstate-opt}" FALSE "${patch-opt}" FALSE "${discard-opt}"
+            TRUE "${reinstate-opt}" FALSE "${discard-opt}" FALSE "${archive-opt}
         }
         notify_user() { ${pkgs.libnotify}/bin/notify-send "Drift Manager" "$1"; }
       '';
@@ -129,7 +108,7 @@ let
 in
 {
   options.services.drift-manager = {
-    enable = lib.mkEnableOption "Configuration Drift Manager & Patch Generator";
+    enable = lib.mkEnableOption "Configuration Drift Manager";
 
     # These directories need to be absolute paths
     # TODO: Validate that these directories are absolute paths
