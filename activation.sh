@@ -1,4 +1,5 @@
-#!/usr/bin/env bash
+SCRIPT_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
+source "$SCRIPT_DIR/common.sh"
 
 rm_with_parents_if_empty() {
     # delete the file given as argument; then if it's parent directory is now empty, delete it; then if
@@ -111,18 +112,6 @@ activate_each_file() {
 
         activate_file "$gen" "$applied" "$live" "$stashdir" "$deletedlistfile" "$livedir"
     done
-}
-
-check_stash_empty() {
-    local stashdir="$1"
-
-    if ! test -n "$(find "$stashdir" -maxdepth 0 -empty)" ; then
-        echo "The stash directory, \"$stashdir\", is not empty." >&2
-        echo "This is an unexpected state, you may want to manually delete stashed files to restore a consistent state." >&2
-        exit 1
-    fi
-
-    return 0
 }
 
 check_all_genfiles_present_no_extras() {
@@ -393,43 +382,6 @@ generate_numbered_stash() {
     mkdir -- "$dir/$next"
     _out="$dir/$next"
     return 0
-}
-
-check_valid_filename() {
-    local name="${1:-}"
-
-    # Must not be empty
-    if [[ -z "$name" ]]; then
-        echo "Error ($LINENO): invalid filename" >&2
-        exit 1
-    fi
-
-    # Must not contain a slash
-    if [[ "$name" == */* ]]; then
-        echo "Error ($LINENO): invalid filename" >&2
-        exit 1
-    fi
-
-    # Must not be . or ..
-    if [[ "$name" == "." || "$name" == ".." ]]; then
-        echo "Error ($LINENO): invalid filename" >&2
-        exit 1
-    fi
-
-    # Must not exceed filesystem name limit (typically 255 bytes)
-    if (( ${#name} > 255 )); then
-        echo "Error ($LINENO): invalid filename" >&2
-        exit 1
-    fi
-
-    return 0
-}
-
-check_is_directory() {
-    if [ ! -d "$1" ]; then
-        echo "Error ($LINENO): $1 is not a directory" >&2
-        exit 1
-    fi
 }
 
 activate() {
