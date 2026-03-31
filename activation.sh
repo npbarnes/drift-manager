@@ -397,9 +397,6 @@ activate() {
     local appliedfiles_name="$6"
     local livefiles_name="$7"
 
-    local deletedlistfile="$stashparent/deletedlist.txt"
-    touch "$deletedlistfile"
-
     check_is_directory "$stashparent"
     check_is_directory "$gendir"
     check_is_directory "$applieddir"
@@ -408,8 +405,11 @@ activate() {
     local stashdir
     generate_numbered_stash "$stashparent" stashdir
     check_is_directory "$stashdir"
-
     check_stash_empty "$stashdir"
+
+    local deletedlistfile="$stashdir/deletedlist.txt"
+    touch "$deletedlistfile"
+
     check_all_genfiles_present_no_extras "$gendir" "$genfiles_name"
     check_entries "$gendir" "$applieddir" "$liveparent" "$genfiles_name" "$appliedfiles_name" "$livefiles_name"
 
