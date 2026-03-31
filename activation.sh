@@ -256,15 +256,15 @@ handle_untracked_applied() {
     done
     
     # Collect untracked files in $applieddir
+    local -a actual_applied
+    collect_dir_contents_array "$applieddir" actual_applied
     local -a untracked=()
-    shopt -s nullglob dotglob
-    for f in "$applieddir"/*; do
+    for f in "${actual_applied[@]}"; do
         [[ -f "$f" ]] || continue
         if [[ ! -v applied_set["$f"] ]]; then
             untracked+=("$f")
         fi
     done
-    shopt -u nullglob dotglob
 
     local rel
     local live_counterpart
@@ -310,18 +310,7 @@ validate_numbered_dir() {
             exit 1
         fi
 
-        # Must be purely numeric
-        if [[ ! "$name" =~ ^[0-9]+$ ]]; then
-            echo "Error ($LINENO): '$name' is not a numeric directory name." >&2
-            exit 1
-        fi
-
-        # Must have no leading zeros (except "0" itself, but 0 is not
-        # a valid member of a 1-based sequence, so reject it too)
-        if [[ "$name" =~ ^0 ]]; then
-            echo "Error ($LINENO): '$name' has a leading zero (or is zero)." >&2
-            exit 1
-        fi
+        check_well_formed_number "$name"
 
         numbered_dirs+=("$name")
     done
@@ -373,7 +362,7 @@ generate_numbered_stash() {
     local highest
     validate_numbered_dir "$dir" highest
 
-    if [ -d "$dir/$highest" ] && test -n "$(find "$dir/$highest" -maxdepth 0 -empty)" ; then
+    if is_empty_stash "$dir/$highest" ; then
         _out="$dir/$highest"
         return 0
     fi
