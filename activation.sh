@@ -13,9 +13,9 @@ rm_with_parents_if_empty() {
 }
 
 stash() {
-    # Precondition: "$1" is an absolute path to a readable file (not directory) in the live directory
+    # Precondition: "$1" is an absolute path to a readable file (not directory) under "$3"
     # and "$2" is an absolute path to a writable directory
-    # Postcondition: if "$1" is "$livedir/a/b/c" then it gets copied to "$2/a/b/c"
+    # Postcondition: if "$1" is "$3/a/b/c" then it gets copied to "$2/conflicts/a/b/c"
 
     local abspath="$1"
     local stashdir="$2"
@@ -44,7 +44,7 @@ stash() {
     local relpath
     relpath="$(realpath --relative-to="$livedir" "$abspath")"
 
-    # Check that abspath is in the home directory
+    # Check that abspath is in the live directory
     if [[ "$relpath" == ..* ]]; then
         echo "Error ($LINENO): Only files under the home directory can be stashed" >&2
         exit 4
@@ -53,7 +53,7 @@ stash() {
     local folders
     local stashpath
     folders="$(dirname "$relpath")"
-    stashpath="$stashdir/$folders"
+    stashpath="$stashdir/conflicts/$folders"
 
     mkdir -p "$stashpath"
     cp --update=none-fail "$abspath" "$stashpath"
@@ -62,7 +62,6 @@ stash() {
 mark_deleted() {
     local abspath="$1"
     local deletedlistfile="$2"
-    # TODO: track stash number
     echo "$abspath" >> "$deletedlistfile"
 }
 
