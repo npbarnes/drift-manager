@@ -79,7 +79,7 @@ let
 
   # GUI toolkit agnostic prompts
   prompt-title = "Configuration Drift Detected";
-  prompt = "Activation applied a pure Nix generation to $1.\nHow would you handle manual endits?";
+  prompt = "Activation applied a pure Nix generation to $1.\nHow would you handle manual edits?";
   reinstate-opt = "Reinstate manual edits (Override Nix)";
   discard-opt = "Discard manual edits (Keep pure Nix)";
   archive-opt = "Archive manual edits";
