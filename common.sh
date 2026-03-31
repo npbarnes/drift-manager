@@ -161,7 +161,7 @@ check_no_stashes() {
     local -a items
     collect_dir_contents_array "$stashparent" items
 
-    if [ "${#items[@]}" != 1 ] || ! is_empty_stash "$items"; then
+    if [ "${#items[@]}" -gt 1 ] || ! is_empty_stash "$items"; then
         echo "Error ($LINENO): stash is not empty" >&2
         exit 1
     fi
