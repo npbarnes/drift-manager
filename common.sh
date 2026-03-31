@@ -173,18 +173,3 @@ check_no_stashes() {
 
     return 0    
 }
-
-check_stash_empty() {
-    # Omit number argument to check the stashparent, otherwise check the numbered stash
-    local stash="$1"
-
-    local n="$(basename "$stash")"
-
-    check_well_formed_number "$n"
-    if is_empty_stash "$stash"; then
-        return 0
-    else
-        echo "Error ($LINENO): $stash contains conflicts" >&2
-        exit 3
-    fi
-}
