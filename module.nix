@@ -210,53 +210,20 @@ in
 
     # 3. NEGOTIATOR DAEMON
     systemd.user.paths.nix-drift-negotiator = {
-      Unit.Description = "Watch for NixOS Configuration Drift Conflicts";
-      Path.PathExistsGlob = "${syncDir}/*.conflict";
+      Unit.Description = "Watch for Drift Manager Conflicts";
+      Unit.After = [ "graphical-session.target" ];
+      Path.DirectoryNotEmpty = "${cfg.stashDir}";
       Path.MakeDirectory = true;
-      Install.WantedBy = [ "default.target" ];
+      Install.WantedBy = [ "graphical-session.target" ];
     };
 
     systemd.user.services.nix-drift-negotiator = {
-      Unit.Description = "NixOS Configuration Drift Negotiator";
+      Unit.Description = "Drift Manager Negotiator";
+      Unit.Requires = [ "graphical-session.target" ];
+      Unit.After = [ "graphical-session.target" ];
       Service.Type = "oneshot";
       Service.ExecStart = pkgs.writeShellScript "nix-drift-negotiator" ''
-        export PATH=${
-          lib.makeBinPath [
-            pkgs.coreutils
-            pkgs.diffutils
-            pkgs.kdePackages.kdialog
-            pkgs.zenity
-            pkgs.libnotify
-          ]
-        }:$PATH
-
-        sleep 2
-        ${patchHelperFunc}
-        ${guiPromptFunc}
-
-        ${lib.concatStringsSep "\n" (
-          lib.mapAttrsToList (name: paths: ''
-            if [ -f ${paths.esc.conflictFlag} ] && [ -f ${paths.esc.stashedFile} ]; then
-
-              CHOICE=$(prompt_user ${paths.esc.name})
-
-              if [ "$CHOICE" = "${reinstate-opt}" ]; then
-                cp ${paths.esc.stashedFile} ${paths.esc.liveFile}
-                notify_user "Reinstated manual edits for "${paths.esc.name}"."
-
-              elif [ "$CHOICE" = "${patch-opt}" ]; then
-                PATCH_FILE=$(generate_patch_path ${paths.esc.name} ${escPatchDir})
-                diff -u --label "a/"${paths.esc.name} ${paths.esc.appliedFile} --label "b/"${paths.esc.name} ${paths.esc.stashedFile} > "$PATCH_FILE" || true
-                notify_user "Saved Git patch to $PATCH_FILE"
-
-              elif [ "$CHOICE" = "${discard-opt}" ]; then
-                notify_user "Discarded manual edits for "${paths.esc.name}". System is pure."
-              fi
-
-              rm -f ${paths.esc.conflictFlag} ${paths.esc.stashedFile}
-            fi
-          '') trackedFiles
-        )}
+          # TODO
       '';
     };
 
