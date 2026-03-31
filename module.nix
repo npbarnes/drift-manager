@@ -197,15 +197,15 @@ in
         set -euo pipefail
         source ${./activation.sh}
 
-        STASH_DIR=${cfg.stashDir}
-        REF_DIR=${cfg.referenceDir}
-        APPLIED_DIR=${cfg.appliedDir}
+        STASH_DIR="${cfg.stashDir}"
+        REF_DIR="${cfg.referenceDir}"
+        APPLIED_DIR="${cfg.appliedDir}"
 
         REF_FILES=${mapAttrsToBashArray (name: paths: paths.refFile) trackedFiles}
         APPLIED_FILES=${mapAttrsToBashArray (name: paths: paths.appliedFile) trackedFiles}
         LIVE_FILES=${mapAttrsToBashArray (name: paths: paths.liveFile) trackedFiles}
 
-        activate "$STASH_DIR" "$REF_DIR" "$APPLIED_DIR" "$REF_FILES" "$APPLIED_FILES" "$LIVE_FILES"
+        activate "$STASH_DIR" "$REF_DIR" "$APPLIED_DIR" "${config.home.homeDirectory}" REF_FILES APPLIED_FILES LIVE_FILES
       '';
 
     # 3. NEGOTIATOR DAEMON
