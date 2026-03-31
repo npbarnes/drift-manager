@@ -118,7 +118,7 @@ check_all_genfiles_present_no_extras() {
     local -n _genfiles_expected="$2"
 
     # Convert genfiles array to a set for O(1) lookup
-    local -A expected_set
+    local -A expected_set=()
     for f in "${_genfiles_expected[@]}"; do
         expected_set["$f"]=1
     done
@@ -244,12 +244,13 @@ check_entries() {
 }
 
 handle_untracked_applied() {
-    local -n _appliedfiles="$1"
+    local applieddir="$1"
     local stashdir="$2"
     local livedir="$3"
+    local -n _appliedfiles="$4"
 
     # Convert appliedfiles to a set for O(1) lookup
-    local -A applied_set
+    local -A applied_set=()
     for f in "${_appliedfiles[@]}"; do
         applied_set["$f"]=1
     done
@@ -412,7 +413,7 @@ activate() {
     check_all_genfiles_present_no_extras "$gendir" "$genfiles_name"
     check_entries "$gendir" "$applieddir" "$liveparent" "$genfiles_name" "$appliedfiles_name" "$livefiles_name"
 
-    handle_untracked_applied "$appliedfiles_name" "$stashdir" "$liveparent"
+    handle_untracked_applied "$applieddir" "$stashdir" "$liveparent" "$appliedfiles_name" 
 
     activate_each_file "$genfiles_name" "$appliedfiles_name" "$livefiles_name" "$stashdir" "$deletedlistfile" "$liveparent"
 }
