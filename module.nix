@@ -8,7 +8,7 @@
 let
   cfg = config.services.drift-manager;
 
-  enabledFiles = lib.filterAttrs (n: v: v.enable) cfg.file;
+  enabledFiles = lib.filterAttrs (_: v: v.enable) cfg.file;
 
   # --- recursive directory flattening logic ---
   expandFileCfg =
@@ -32,7 +32,7 @@ let
             relPath = lib.removePrefix "${sourceStr}/" (toString filePath);
           in
           lib.nameValuePair "${name}/${relPath}" {
-            enable = fileCfg.enable;
+            inherit (fileCfg) enable;
             target = "${fileCfg.target}/${relPath}";
             source = filePath;
           }
@@ -60,8 +60,6 @@ let
       refFile = "${cfg.referenceDir}/${name}";
       appliedFile = "${cfg.appliedDir}/${name}";
       stashedFile = "${cfg.stashDir}/${name}";
-      conflictFlag = "${cfg.conflictDir}/${name}";
-      deleteFlag = "${cfg.conflictDir}/${name}";
     in
     {
       inherit
@@ -71,40 +69,10 @@ let
         refFile
         appliedFile
         stashedFile
-        conflictFlag
         ;
     };
 
   trackedFiles = lib.mapAttrs (name: fileCfg: mkFileLogic name fileCfg) flattenedFiles;
-
-  # GUI toolkit agnostic prompts
-  prompt-title = "Configuration Drift Detected";
-  prompt = "Activation applied a pure Nix generation to $1.\nHow would you handle manual edits?";
-  reinstate-opt = "Reinstate manual edits (Override Nix)";
-  discard-opt = "Discard manual edits (Keep pure Nix)";
-  archive-opt = "Archive manual edits";
-  guiPromptFunc =
-    if cfg.dialogTool == "kdialog" then
-      ''
-        prompt_user() {
-          ${pkgs.kdePackages.kdialog}/bin/kdialog --title "${prompt-title}" \
-            --combobox "${prompt}" \
-            "${reinstate-opt}" "${discard-opt}" "${archive-opt} \
-            --default "${reinstate-opt}"
-        }
-        notify_user() { ${pkgs.kdePackages.kdialog}/bin/kdialog --passivepopup "$1" 4; }
-      ''
-    else
-      ''
-        prompt_user() {
-          ${pkgs.zenity}/bin/zenity --list --title="${prompt-title}" \
-            --text="${prompt}" \
-            --radiolist --column="Select" --column="Action" \
-            TRUE "${reinstate-opt}" FALSE "${discard-opt}" FALSE "${archive-opt}
-        }
-        notify_user() { ${pkgs.libnotify}/bin/notify-send "Drift Manager" "$1"; }
-      '';
-
 in
 {
   options.services.drift-manager = {
@@ -182,119 +150,131 @@ in
 
   config = lib.mkIf cfg.enable {
 
-    # 1. THE ANCHOR
-    home.file = lib.mapAttrs' (
-      name: paths: lib.nameValuePair "${referenceDir}/${name}" { source = paths.sourcePath; }
-    ) trackedFiles;
+    home = {
+      # ANCHOR
+      file = lib.mapAttrs' (
+        name: paths: lib.nameValuePair "${referenceDir}/${name}" { source = paths.sourcePath; }
+      ) trackedFiles;
 
-    # 2. ACTIVATION SCRIPT
-    home.activation.driftManagerEnforcer =
-      let
-        listToBashArray = list: "(\"" + (lib.concatStrigsSep "\" \"" list) + "\")";
-        mapAttrsToBashArray = f: s: listToBashArray (lib.mapAttrsToList f s);
-      in
-      lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-        set -euo pipefail
-        source ${./activation.sh}
+      # ACTIVATION SCRIPT
+      activation.driftManagerEnforcer =
+        let
+          listToBashArray = list: "(\"" + (lib.concatStrigsSep "\" \"" list) + "\")";
+          mapAttrsToBashArray = f: s: listToBashArray (lib.mapAttrsToList f s);
+        in
+        lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+          set -euo pipefail
+          source ${./activation.sh}
 
-        STASH_DIR="${cfg.stashDir}"
-        REF_DIR="${cfg.referenceDir}"
-        APPLIED_DIR="${cfg.appliedDir}"
+          STASH_DIR="${cfg.stashDir}"
+          REF_DIR="${cfg.referenceDir}"
+          APPLIED_DIR="${cfg.appliedDir}"
 
-        REF_FILES=${mapAttrsToBashArray (name: paths: paths.refFile) trackedFiles}
-        APPLIED_FILES=${mapAttrsToBashArray (name: paths: paths.appliedFile) trackedFiles}
-        LIVE_FILES=${mapAttrsToBashArray (name: paths: paths.liveFile) trackedFiles}
+          REF_FILES=${mapAttrsToBashArray (_: paths: paths.refFile) trackedFiles}
+          APPLIED_FILES=${mapAttrsToBashArray (_: paths: paths.appliedFile) trackedFiles}
+          LIVE_FILES=${mapAttrsToBashArray (_: paths: paths.liveFile) trackedFiles}
 
-        activate "$STASH_DIR" "$REF_DIR" "$APPLIED_DIR" "${config.home.homeDirectory}" REF_FILES APPLIED_FILES LIVE_FILES
-      '';
+          activate "$STASH_DIR" "$REF_DIR" "$APPLIED_DIR" "${config.home.homeDirectory}" REF_FILES APPLIED_FILES LIVE_FILES
+        '';
 
-    # 3. NEGOTIATOR DAEMON
-    systemd.user.paths.nix-drift-negotiator = {
-      Unit.Description = "Watch for Drift Manager Conflicts";
-      Unit.After = [ "graphical-session.target" ];
-      Path.DirectoryNotEmpty = "${cfg.stashDir}";
-      Path.MakeDirectory = true;
-      Install.WantedBy = [ "graphical-session.target" ];
+      # CLI TOOL
+      packages = [
+        (pkgs.writeShellScriptBin "nix-drift" ''
+          set -euo pipefail
+          export PATH=${
+            lib.makeBinPath [
+              pkgs.coreutils
+              pkgs.diffutils
+            ]
+          }:$PATH
+
+          ${patchHelperFunc}
+          COMMAND=''${1:-status}
+
+          case "$COMMAND" in
+            status)
+              echo "--- Nix Drift Status ---"
+              ${lib.concatStringsSep "\n" (
+                lib.mapAttrsToList (_: paths: ''
+                  if [ -f ${paths.esc.appliedFile} ] && ! cmp -s ${paths.esc.liveFile} ${paths.esc.appliedFile}; then
+                    echo "DRIFT DETECTED: "${paths.esc.name}
+                  fi
+                '') trackedFiles
+              )}
+              ;;
+
+            diff)
+              ${lib.concatStringsSep "\n" (
+                lib.mapAttrsToList (_: paths: ''
+                  if [ -f ${paths.esc.appliedFile} ] && ! cmp -s ${paths.esc.liveFile} ${paths.esc.appliedFile}; then
+                    echo "--- Drift Diff for "${paths.esc.name}" ---"
+                    diff -u --color=always ${paths.esc.appliedFile} ${paths.esc.liveFile} || true
+                    echo ""
+                  fi
+                '') trackedFiles
+              )}
+              ;;
+
+            patch)
+              # Standard bash variables inside double quotes are natively safe
+              DEST_DIR="''${2:-${cfg.patchDir}}"
+              COUNT=0
+
+              ${lib.concatStringsSep "\n" (
+                lib.mapAttrsToList (_: paths: ''
+                  if [ -f ${paths.esc.appliedFile} ] && ! cmp -s ${paths.esc.liveFile} ${paths.esc.appliedFile}; then
+                    PATCH_FILE=$(generate_patch_path ${paths.esc.name} "$DEST_DIR")
+                    echo "Generating $PATCH_FILE..."
+                    diff -u --label "a/"${paths.esc.name} ${paths.esc.appliedFile} --label "b/"${paths.esc.name} ${paths.esc.liveFile} > "$PATCH_FILE" || true
+                    COUNT=$((COUNT + 1))
+                  fi
+                '') trackedFiles
+              )}
+
+              if [ "$COUNT" -gt 0 ]; then
+                echo -e "\nDone. Patches saved to $DEST_DIR/"
+                echo "Use 'git apply' or your preferred patch tool to merge these into your config."
+              else
+                echo "No configuration drift found."
+              fi
+              ;;
+
+            *)
+              echo "Usage: nix-drift [status|diff|patch [output-dir]]"
+              exit 1
+              ;;
+          esac
+        '')
+      ];
     };
 
-    systemd.user.services.nix-drift-negotiator = {
-      Unit.Description = "Drift Manager Negotiator";
-      Unit.Requires = [ "graphical-session.target" ];
-      Unit.After = [ "graphical-session.target" ];
-      Service.Type = "oneshot";
-      Service.ExecStart = pkgs.writeShellScript "nix-drift-negotiator" ''
-          # TODO
-      '';
+    # NEGOTIATOR DAEMON
+    systemd.user = {
+      paths.nix-drift-negotiator = {
+        Unit = {
+          Description = "Watch for Drift Manager Conflicts";
+          After = [ "graphical-session.target" ];
+        };
+        Path = {
+          DirectoryNotEmpty = "${cfg.stashDir}";
+          MakeDirectory = true;
+        };
+        Install.WantedBy = [ "graphical-session.target" ];
+      };
+
+      services.nix-drift-negotiator = {
+        Unit = {
+          Description = "Drift Manager Negotiator";
+          Requires = [ "graphical-session.target" ];
+          After = [ "graphical-session.target" ];
+        };
+        Service = {
+          Type = "oneshot";
+          ExecStart = pkgs.writeShellScript "nix-drift-negotiator" ''
+            TODO
+          '';
+        };
+      };
     };
-
-    # 4. THE CLI TOOL
-    home.packages = [
-      (pkgs.writeShellScriptBin "nix-drift" ''
-        set -euo pipefail
-        export PATH=${
-          lib.makeBinPath [
-            pkgs.coreutils
-            pkgs.diffutils
-          ]
-        }:$PATH
-
-        ${patchHelperFunc}
-        COMMAND=''${1:-status}
-
-        case "$COMMAND" in
-          status)
-            echo "--- Nix Drift Status ---"
-            ${lib.concatStringsSep "\n" (
-              lib.mapAttrsToList (name: paths: ''
-                if [ -f ${paths.esc.appliedFile} ] && ! cmp -s ${paths.esc.liveFile} ${paths.esc.appliedFile}; then
-                  echo "DRIFT DETECTED: "${paths.esc.name}
-                fi
-              '') trackedFiles
-            )}
-            ;;
-
-          diff)
-            ${lib.concatStringsSep "\n" (
-              lib.mapAttrsToList (name: paths: ''
-                if [ -f ${paths.esc.appliedFile} ] && ! cmp -s ${paths.esc.liveFile} ${paths.esc.appliedFile}; then
-                  echo "--- Drift Diff for "${paths.esc.name}" ---"
-                  diff -u --color=always ${paths.esc.appliedFile} ${paths.esc.liveFile} || true
-                  echo ""
-                fi
-              '') trackedFiles
-            )}
-            ;;
-
-          patch)
-            # Standard bash variables inside double quotes are natively safe
-            DEST_DIR="''${2:-${cfg.patchDir}}"
-            COUNT=0
-
-            ${lib.concatStringsSep "\n" (
-              lib.mapAttrsToList (name: paths: ''
-                if [ -f ${paths.esc.appliedFile} ] && ! cmp -s ${paths.esc.liveFile} ${paths.esc.appliedFile}; then
-                  PATCH_FILE=$(generate_patch_path ${paths.esc.name} "$DEST_DIR")
-                  echo "Generating $PATCH_FILE..."
-                  diff -u --label "a/"${paths.esc.name} ${paths.esc.appliedFile} --label "b/"${paths.esc.name} ${paths.esc.liveFile} > "$PATCH_FILE" || true
-                  COUNT=$((COUNT + 1))
-                fi
-              '') trackedFiles
-            )}
-
-            if [ "$COUNT" -gt 0 ]; then
-              echo -e "\nDone. Patches saved to $DEST_DIR/"
-              echo "Use 'git apply' or your preferred patch tool to merge these into your config."
-            else
-              echo "No configuration drift found."
-            fi
-            ;;
-
-          *)
-            echo "Usage: nix-drift [status|diff|patch [output-dir]]"
-            exit 1
-            ;;
-        esac
-      '')
-    ];
   };
 }
