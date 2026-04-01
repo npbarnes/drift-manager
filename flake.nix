@@ -23,7 +23,28 @@
       homeModules.default = import ./module.nix;
 
       devShells.${system}.default = pkgs.mkShell {
-        packages = [ pkgs.shellcheck ];
+        packages = [
+          pkgs.shfmt
+          pkgs.shellcheck
+          pkgs.shellspec
+          pkgs.nixfmt
+          pkgs.nixfmt-tree
+        ];
+      };
+
+      checks.x86_64-linux = {
+        nixfmt =
+          pkgs.runCommand "check-nixfmt"
+            {
+              nativeBuildInputs = [ pkgs.nixfmt ];
+              src = self;
+            }
+            ''
+              cd "$src"
+              echo "Checking Nix formatting..."
+              find . -name '*.nix' -print0 | xargs -0 nixfmt --check
+              touch "$out"
+            '';
       };
     };
 }
