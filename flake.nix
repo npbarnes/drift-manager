@@ -39,7 +39,7 @@
             ''
               cd "$src"
               echo "Checking Nix formatting..."
-              find . -name '*.nix' -print0 | xargs -0 nixfmt --check
+              find . -name '*.nix' -exec nixfmt --check {} +
               touch "$out"
             '';
 
@@ -55,8 +55,8 @@
             ''
               cd "$src"
               echo "Linting Nix files..."
-              find . -name '*.nix' -exec statix check {} \;
-              find . -name '*.nix' -exec deadnix {} +;
+              find . -name '*.nix' -print0 | xargs -0 -I {} statix check {}
+              find . -name '*.nix' -exec deadnix {} +
               touch "$out"
             '';
 
@@ -69,7 +69,7 @@
             ''
               cd "$src"
               echo "Checking Bash formatting..."
-              find . -name '*.sh' -print0 | xargs -0 shfmt --indent 4 --diff
+              find . -name '*.sh' -exec shfmt --indent 4 --diff {} +
               touch "$out"
             '';
 
@@ -82,7 +82,7 @@
             ''
               cd "$src"
               echo "Linting Bash files..."
-              find . -name '*.sh' -print0 | xargs -0 shellcheck
+              find . -name '*.sh' -exec shellcheck {} +
               touch "$out"
             '';
       };
