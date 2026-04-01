@@ -58,6 +58,19 @@
               find . -name '*.sh' -print0 | xargs -0 shfmt --indent 4 --diff
               touch "$out"
             '';
+
+        shellcheck =
+          pkgs.runCommand "shellcheck"
+            {
+              nativeBuildInputs = [ pkgs.shellcheck ];
+              src = self;
+            }
+            ''
+              cd "$src"
+              echo "Linting Bash files..."
+              find . -name '*.sh' -print0 | xargs -0 shellcheck
+              touch "$out"
+            '';
       };
     };
 }
