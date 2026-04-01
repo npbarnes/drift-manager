@@ -24,6 +24,8 @@
           pkgs.shellspec
           pkgs.nixfmt
           pkgs.nixfmt-tree
+          pkgs.statix
+          pkgs.deadnix
         ];
       };
 
@@ -38,6 +40,23 @@
               cd "$src"
               echo "Checking Nix formatting..."
               find . -name '*.nix' -print0 | xargs -0 nixfmt --check
+              touch "$out"
+            '';
+
+        nix-linting =
+          pkgs.runCommand "nix-linting"
+            {
+              nativeBuildInputs = [
+                pkgs.statix
+                pkgs.deadnix
+              ];
+              src = self;
+            }
+            ''
+              cd "$src"
+              echo "Linting Nix files..."
+              find . -name '*.nix' -exec statix check {} \;
+              find . -name '*.nix' -exec deadnix {} +;
               touch "$out"
             '';
 
