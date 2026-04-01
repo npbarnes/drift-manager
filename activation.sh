@@ -60,7 +60,7 @@ stash() {
 mark_deleted() {
     local abspath="$1"
     local deletedlistfile="$2"
-    echo "$abspath" >> "$deletedlistfile"
+    echo "$abspath" >>"$deletedlistfile"
 }
 
 activate_file() {
@@ -104,7 +104,7 @@ activate_each_file() {
     local applied
     local live
 
-    for i in "${!_genfiles[@]}"; do  
+    for i in "${!_genfiles[@]}"; do
         gen="${_genfiles[$i]}"
         applied="${_appliedfiles[$i]}"
         live="${_livefiles[$i]}"
@@ -210,11 +210,11 @@ check_entries() {
         if [[ "$(dirname "$applied")" != "$applieddir" ]]; then
             echo "Error ($LINENO): applied file is not located in the applied folder"
             exit 21
-        fi 
+        fi
         if [[ "$(dirname "$live")" != "$livedir" ]]; then
             echo "Error ($LINENO): live file $live is not located in the live folder $livedir."
             exit 22
-        fi 
+        fi
 
         genrel="$(realpath --relative-to="$gendir" "$gen")"
         appliedrel="$(realpath --relative-to="$applieddir" "$applied")"
@@ -254,7 +254,7 @@ handle_untracked_applied() {
     for f in "${_appliedfiles[@]}"; do
         applied_set["$f"]=1
     done
-    
+
     # Collect untracked files in $applieddir
     local -a actual_applied
     collect_dir_contents_array "$applieddir" actual_applied
@@ -291,12 +291,12 @@ generate_numbered_stash() {
     local highest
     validate_numbered_dir "$dir" highest
 
-    if is_empty_stash "$dir/$highest" ; then
+    if is_empty_stash "$dir/$highest"; then
         _out="$dir/$highest"
         return 0
     fi
 
-    local next="$(( highest + 1 ))"
+    local next="$((highest + 1))"
     mkdir -- "$dir/$next"
     _out="$dir/$next"
     return 0
@@ -308,7 +308,7 @@ activate() {
     local gendir="$2"
     local applieddir="$3"
     local liveparent="$4"
-    
+
     # These are the lists of filenames for files under tracking this generation
     # Not necessarily the reflective of the contents of their cooresponding directories
     local genfiles_name="$5"
@@ -331,7 +331,7 @@ activate() {
     check_all_genfiles_present_no_extras "$gendir" "$genfiles_name"
     check_entries "$gendir" "$applieddir" "$liveparent" "$genfiles_name" "$appliedfiles_name" "$livefiles_name"
 
-    handle_untracked_applied "$applieddir" "$stashdir" "$liveparent" "$appliedfiles_name" 
+    handle_untracked_applied "$applieddir" "$stashdir" "$liveparent" "$appliedfiles_name"
 
     activate_each_file "$genfiles_name" "$appliedfiles_name" "$livefiles_name" "$stashdir" "$deletedlistfile" "$liveparent"
 }

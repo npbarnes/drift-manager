@@ -52,7 +52,7 @@ check_valid_filename() {
     fi
 
     # Must not exceed filesystem name limit (typically 255 bytes)
-    if (( ${#name} > 255 )); then
+    if ((${#name} > 255)); then
         echo "Error ($LINENO): invalid filename" >&2
         exit 1
     fi
@@ -124,16 +124,16 @@ is_empty_stash() {
     local count=${#items[@]}
 
     # If the directory is empty, it's a success
-    (( count == 0 )) && return 0
+    ((count == 0)) && return 0
 
     # If there are more than 2 items, there is definitely something extra
-    (( count > 2 )) && return 1
+    ((count > 2)) && return 1
 
     # Evaluate the 1 or 2 items present
     for item in "${items[@]}"; do
         # Extract just the file/directory name without the path
         local basename="${item##*/}"
-        
+
         if [[ "$basename" == "conflicts" ]]; then
             if [[ ! -d "$item" ]] || ! is_empty "$item"; then
                 return 1
@@ -171,7 +171,7 @@ check_no_stashes() {
         exit 2
     fi
 
-    return 0    
+    return 0
 }
 
 validate_numbered_dir() {
@@ -224,20 +224,20 @@ validate_numbered_dir() {
     fi
 
     local sorted
-    mapfile -t sorted <<< "$sort_output"
+    mapfile -t sorted <<<"$sort_output"
 
     # --- Check for contiguous 1 … N ---
     local expected=1
     for num in "${sorted[@]}"; do
-        if (( num != expected )); then
-            if (( num < expected )); then
+        if ((num != expected)); then
+            if ((num < expected)); then
                 echo "Error ($LINENO): Duplicate directory '$num'." >&2
             else
                 echo "Error ($LINENO): Gap — expected '$expected' but found '$num'." >&2
             fi
             exit 1
         fi
-        (( expected++ ))
+        ((expected++))
     done
 
     # Return the highest number
