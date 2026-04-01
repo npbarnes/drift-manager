@@ -99,7 +99,7 @@ is_well_formed_number() {
 }
 
 check_well_formed_number() {
-    if ! is_well_formed_number $1; then
+    if ! is_well_formed_number "$1"; then
         echo "Error ($LINENO): '$1' is not a positive integer." >&2
         exit 1
     fi
@@ -113,7 +113,8 @@ is_empty_stash() {
     # Ensure the provided argument is a valid directory
     [[ -d "$dir" ]] || return 1
 
-    local n="$(basename "$dir")"
+    local n
+    n="$(basename "$dir")"
     if ! is_well_formed_number "$n"; then
         return 1
     fi
