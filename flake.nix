@@ -69,7 +69,7 @@
             ''
               cd "$src"
               echo "Checking Bash formatting..."
-              find . -name '*.sh' -exec shfmt --indent 4 --diff {} +
+              find . -name '*.sh' -exec shfmt --indent 2 --diff {} +
               touch "$out"
             '';
 
