@@ -59,23 +59,32 @@ check_valid_filename() {
 }
 
 is_empty() {
-  # Returns success if the given file or directory is empty. The given path must point to
-  # either a file or directory that actually exists.
+  # Returns success if the given file or directory is empty. Returns '0' if the file or directory
+  # is determined to be empty, returns '1' if the file or directory is determined to be
+  # non-empty, returns '2' if the file or directory does not exist, or emptyness cannot be
+  # determined due to permissions, or other errors.
   local arg="$1"
 
-  if [ -d "$arg" ]; then
-    if test -n "$(find "$arg" -maxdepth 0 -empty)"; then
+  if [ -f "$arg" ]; then
+    if [ -s "$arg" ]; then
+      return 1
+    else
+      return 0
+    fi
+  else
+    if ! [ -d "$arg" ]; then
+      return 2
+    fi
+
+    if ! [ -r "$arg" ]; then
+      return 2
+    fi
+
+    if [ -n "$(find -H "$arg" -maxdepth 0 -empty)" ]; then
       return 0
     else
       return 1
     fi
-  elif [ -s "$arg" ]; then
-    return 1
-  elif [ -f "$arg" ]; then
-    return 0
-  else
-    echo "Error ($LINENO): is_empty expected either an existing file or existing directory." >&2
-    exit 1
   fi
 }
 

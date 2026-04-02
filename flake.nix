@@ -85,6 +85,19 @@
               find . -name '*.sh' -exec shellcheck --shell=bash {} +
               touch "$out"
             '';
+
+        shellspec =
+          pkgs.runCommand "shellspec"
+            {
+              nativeBuildInputs = [ pkgs.shellspec ];
+              src = self;
+            }
+            ''
+              cd "$src"
+              echo "Testing Bash with shellspec..."
+              shellspec
+              touch "$out"
+            '';
       };
     };
 }
