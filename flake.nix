@@ -82,7 +82,7 @@
             ''
               cd "$src"
               echo "Linting Bash files..."
-              find . -name '*.sh' -exec shellcheck {} +
+              find . -name '*.sh' -exec shellcheck --shell=bash {} +
               touch "$out"
             '';
       };

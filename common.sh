@@ -1,5 +1,3 @@
-# shellcheck shell=bash
-
 collect_dir_contents_array() {
   if [[ ! -d "$1" ]]; then
     echo "Error: '$1' is not a valid directory." >&2
