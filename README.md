@@ -7,4 +7,7 @@ Drift Manager is a Home Manager module that aims to be a convenient (and somewha
      - a command line tool, `nix-drift`, to query changes, revert them, or generate a patch that can be applied to your dotfiles repo, and
      - notifications when manual changes have been overwritten that presents options to revert back to the modified configuration, discard manual configuration, or generate a patch for the changes.
 
-The initial version was vibe-coded by Gemini 3.1 Pro, so don't expect it to be perfect yet. Actually, it doesn't work at all right now 😂. I'm going to fix it up the old fashioned way.
+## Status
+This project is on indefinite hiatus because of an ongoing effort to deprecate activation scripts in NixOS. Since my design relies on activation scripts, that could be an issue. This may or may not affect Home Manager activation scripts, and either way there's probably a workaround using systemd. All the same, I'd rather see how this plays out over the next release or two.
+
+In the meantime, [Chezmoi](https://www.chezmoi.io/) is an excellent project that handily accomplishes goals 2, and 3 among many other great features.
